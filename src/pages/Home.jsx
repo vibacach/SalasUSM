@@ -1,25 +1,36 @@
 import React from "react";
 import Card from "../components/Card";
 import logoUSM from '../assets/Logo_USM.png';
+import fondoUSM from '../assets/usm-CC.jpeg';
 import { HiCamera, HiCalendar, HiClipboardDocumentList, HiCheckCircle, HiClock, HiInboxArrowDown } from "react-icons/hi2";
 
 export default function Home({ onNavigate, reservas }) {
   return (
     <div className="min-h-screen bg-gray-100 pb-20">
       {/* Header con degradado */}
-      <div className="bg-gradient-to-br from-blue-600 to-purple-700 pt-6 pb-20 px-6">
+      <div className="relative bg-gradient-to-br from-blue-600 to-purple-700 pt-6 pb-20 px-6 overflow-hidden">
         <div className="flex items-center mb-6">
+          {/* Imagen de fondo con transparencia */}
           <img
-            src={logoUSM}
-            alt="Logo USM"
-            className="w-12 h-auto mr-3"
+            src={fondoUSM}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
           />
-          <div>
-            <h1 className="text-white font-bold text-2xl">QR Salas USM</h1>
-            <p className="text-blue-100 text-sm">Dashboard</p>
+
+          {/* Contenido del header */}
+          <div className="relative flex items-center mb-6">
+            <img
+              src={logoUSM}
+              alt="Logo USM"
+              className="w-12 h-auto mr-3"
+            />
+            <div>
+              <h1 className="text-white font-bold text-2xl">QR Salas USM</h1>
+              <p className="text-blue-100 text-sm">Dashboard</p>
+            </div>
           </div>
         </div>
-
+        
         {/* Acceso Rápido - Ahora en la parte superior */}
         <div className="grid grid-cols-2 gap-3 mt-6">
           <button
