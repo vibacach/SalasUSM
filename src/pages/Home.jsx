@@ -9,33 +9,29 @@ export default function Home({ onNavigate, reservas }) {
     <div className="min-h-screen bg-gray-100 pb-20">
       {/* Header con degradado */}
       <div className="relative bg-gradient-to-br from-blue-600 to-purple-700 pt-6 pb-20 px-6 overflow-hidden">
-        <div className="flex items-center mb-6">
-          {/* Imagen de fondo con transparencia */}
+        {/* Imagen de fondo con transparencia */}
           <img
             src={fondoUSM}
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
           />
 
+        <div className="flex items-center mb-6 relative">
           {/* Contenido del header */}
-          <div className="relative flex items-center mb-6">
-            <img
-              src={logoUSM}
-              alt="Logo USM"
-              className="w-12 h-auto mr-3"
-            />
+          <div className="flex items-center mb-6 relative">
+            <img src={logoUSM} className="w-12 h-auto mr-3" />
             <div>
-              <h1 className="text-white font-bold text-2xl">QR Salas USM</h1>
+              <h1 className="text-white font-bold text-2xl">QR | Salas USM</h1>
               <p className="text-blue-100 text-sm">Dashboard</p>
             </div>
           </div>
         </div>
-        
+
         {/* Acceso Rápido - Ahora en la parte superior */}
-        <div className="grid grid-cols-2 gap-3 mt-6">
+        <div className="grid grid-cols-2 gap-3 mt-6 relative">
           <button
             onClick={() => onNavigate("escanear")}
-            className="bg-white/95 hover:bg-white text-blue-700 rounded-xl p-5 transition-all shadow-lg hover:shadow-xl"
+            className="bg-white text-blue-700 rounded-xl p-5 shadow-lg"
             aria-label="Ir a escanear código QR de sala"
           >
             <HiCamera className="text-4xl mb-2 mx-auto" />
@@ -43,7 +39,7 @@ export default function Home({ onNavigate, reservas }) {
           </button>
           <button
             onClick={() => onNavigate("horarios")}
-            className="bg-white/95 hover:bg-white text-purple-700 rounded-xl p-5 transition-all shadow-lg hover:shadow-xl"
+            className="bg-white text-purple-700 rounded-xl p-5 shadow-lg"
             aria-label="Ver horarios de todas las salas"
           >
             <HiCalendar className="text-4xl mb-2 mx-auto" />
