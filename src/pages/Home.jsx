@@ -1,5 +1,6 @@
 import React from "react";
 import Card from "../components/Card";
+import logoUSM from '../assets/Logo_USM.png';
 import { HiCamera, HiCalendar, HiClipboardDocumentList, HiCheckCircle, HiClock, HiInboxArrowDown } from "react-icons/hi2";
 
 export default function Home({ onNavigate, reservas }) {
@@ -9,7 +10,7 @@ export default function Home({ onNavigate, reservas }) {
       <div className="bg-gradient-to-br from-blue-600 to-purple-700 pt-6 pb-20 px-6">
         <div className="flex items-center mb-6">
           <img
-            src="../src/assets/Logo_USM.png"
+            src={logoUSM}
             alt="Logo USM"
             className="w-12 h-auto mr-3"
           />
