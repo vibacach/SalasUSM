@@ -25,11 +25,30 @@
     }
   }
 
+  @keyframes shrink {
+    from {
+      width: 100%;
+    }
+    to {
+      width: 0%;
+    }
+  }
+
   .animate-slide-down {
     animation: slide-down 0.3s ease-out;
   }
 
   .animate-scale-in {
     animation: scale-in 0.2s ease-out;
+  }
+
+  .animate-shrink {
+    animation-name: shrink;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
   }
 }

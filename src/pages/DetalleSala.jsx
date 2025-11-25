@@ -7,13 +7,13 @@ import Toast from "../components/Toast";
 import { bloques } from "../data/mockData";
 import { HiCalendar, HiBuildingOffice2, HiUsers, HiCheckCircle } from "react-icons/hi2";
 
-export default function DetalleSala({ sala, onNavigate, onReservar }) {
+export default function DetalleSala({ sala, reservas, onNavigate, onReservar }) {
   // Obtener fecha actual y fecha máxima (7 días desde hoy)
   const hoy = new Date();
   const maxFecha = new Date();
   maxFecha.setDate(maxFecha.getDate() + 7);
 
-  // Estado para la fecha seleccionada (por defecto hoy)
+  // Estado para la fecha seleccionada (por defecto hoy, formato YYYY-MM-DD para el input)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
     hoy.toISOString().split('T')[0]
   );
@@ -51,10 +51,33 @@ export default function DetalleSala({ sala, onNavigate, onReservar }) {
     setConfirmacion(false);
     setToast({
       type: "success",
-      message: `Reserva confirmada: ${sala.nombre} - Bloque ${bloqueSeleccionado} - ${fechaSeleccionada}`
+      message: `Reserva confirmada: ${sala.nombre} - Bloque ${bloqueSeleccionado}`
     });
+    setBloqueSeleccionado(null); // Limpiamos selección
     setTimeout(() => onNavigate("home"), 1500);
   };
+
+  // Lógica para verificar disponibilidad dinámica
+  const verificarOcupacion = (bloque) => {
+    // 1. Ocupación estática (desde mockData)
+    if (sala.ocupados.includes(bloque)) return true;
+
+    // 2. Ocupación dinámica (desde reservas guardadas)
+    // Convertimos fecha del input (yyyy-mm-dd) a formato de reserva (dd/mm/yyyy)
+    const [anio, mes, dia] = fechaSeleccionada.split('-');
+    const fechaComparar = `${dia}/${mes}/${anio}`;
+
+    return reservas.some(r => 
+      r.sala === sala.nombre && 
+      r.bloque === bloque && 
+      r.fecha === fechaComparar
+    );
+  };
+
+  // --- CÁLCULO DE ESTADÍSTICAS ---
+  // Filtramos los bloques para contar cuántos están ocupados según la fecha seleccionada
+  const bloquesOcupadosCount = bloques.filter(b => verificarOcupacion(b)).length;
+  const bloquesDisponiblesCount = bloques.length - bloquesOcupadosCount;
 
   return (
     <div className="min-h-screen bg-gray-100 pb-20">
@@ -105,7 +128,10 @@ export default function DetalleSala({ sala, onNavigate, onReservar }) {
           <input
             type="date"
             value={fechaSeleccionada}
-            onChange={(e) => setFechaSeleccionada(e.target.value)}
+            onChange={(e) => {
+              setFechaSeleccionada(e.target.value);
+              setBloqueSeleccionado(null); // Reiniciar selección al cambiar fecha
+            }}
             min={hoy.toISOString().split('T')[0]}
             max={maxFecha.toISOString().split('T')[0]}
             className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-base focus:outline-none focus:border-blue-500 transition-colors"
@@ -122,7 +148,7 @@ export default function DetalleSala({ sala, onNavigate, onReservar }) {
           </h3>
           <div className="grid grid-cols-4 gap-2">
             {bloques.map((bloque) => {
-              const ocupado = sala.ocupados.includes(bloque);
+              const ocupado = verificarOcupacion(bloque);
               const seleccionado = bloqueSeleccionado === bloque;
               return (
                 <button
@@ -130,16 +156,17 @@ export default function DetalleSala({ sala, onNavigate, onReservar }) {
                   onClick={() => !ocupado && handleSeleccionarBloque(bloque)}
                   disabled={ocupado}
                   className={`
-                    text-center py-3 rounded-lg text-xs font-semibold transition-all
+                    text-center py-3 rounded-lg text-xs font-semibold transition-all relative
                     ${ocupado
-                      ? "bg-red-100 text-red-800 cursor-not-allowed"
+                      ? "bg-red-100 text-red-800 cursor-not-allowed border border-red-200"
                       : seleccionado
                         ? "bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg scale-105"
-                        : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer hover:scale-105"
+                        : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer hover:scale-105 border border-green-200"
                     }
                   `}
                 >
                   {bloque}
+                  {ocupado && <span className="absolute bottom-0.5 left-0 w-full text-[9px] opacity-70">Ocup</span>}
                 </button>
               );
             })}
@@ -164,26 +191,31 @@ export default function DetalleSala({ sala, onNavigate, onReservar }) {
           </div>
         )}
 
-        {/* Estadísticas */}
+        {/* Estadísticas Visuales (Actualizado) */}
         <Card className="bg-gray-50">
           <div className="flex justify-around text-xs">
+            {/* Bloques Disponibles */}
             <div className="text-center">
-              <div className="font-semibold text-green-600">
-                {bloques.filter(b => !sala.ocupados.includes(b)).length}
+              <div className="font-bold text-lg text-green-600">
+                {bloquesDisponiblesCount}
               </div>
-              <div className="text-gray-600">Disponibles</div>
+              <div className="text-gray-600 font-medium">Disponibles</div>
             </div>
+
+            {/* Bloques Ocupados */}
             <div className="text-center">
-              <div className="font-semibold text-red-600">
-                {sala.ocupados.length}
+              <div className="font-bold text-lg text-red-600">
+                {bloquesOcupadosCount}
               </div>
-              <div className="text-gray-600">Ocupados</div>
+              <div className="text-gray-600 font-medium">Ocupados</div>
             </div>
+
+            {/* Total */}
             <div className="text-center">
-              <div className="font-semibold text-gray-800">
+              <div className="font-bold text-lg text-gray-800">
                 {bloques.length}
               </div>
-              <div className="text-gray-600">Total</div>
+              <div className="text-gray-600 font-medium">Total</div>
             </div>
           </div>
         </Card>

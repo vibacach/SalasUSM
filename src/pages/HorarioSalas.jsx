@@ -5,9 +5,9 @@ import Button from "../components/Button";
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
 import { salas, bloques, etiquetasEquipamiento, etiquetasEdificio } from "../data/mockData";
-import { HiUsers, HiComputerDesktop, HiChartBar, HiCheckCircle, HiMagnifyingGlass, HiXMark, HiShare, HiAdjustmentsHorizontal, HiChevronDown, HiChevronUp, HiBuildingOffice2, HiCalendar } from "react-icons/hi2";
+import { HiUsers, HiChartBar, HiCheckCircle, HiMagnifyingGlass, HiXMark, HiShare, HiAdjustmentsHorizontal, HiChevronDown, HiChevronUp, HiBuildingOffice2, HiCalendar } from "react-icons/hi2";
 
-export default function HorarioSalas({ onNavigate, onReservar }) {
+export default function HorarioSalas({ reservas, onNavigate, onReservar }) {
   const [salaExpandida, setSalaExpandida] = useState(null);
   const [bloqueSeleccionado, setBloqueSeleccionado] = useState(null);
   const [salaSeleccionada, setSalaSeleccionada] = useState(null);
@@ -17,17 +17,17 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
   const [mostrarCompartir, setMostrarCompartir] = useState(null);
   const [mostrarFiltroEquipamiento, setMostrarFiltroEquipamiento] = useState(false);
   const [mostrarFiltroEdificio, setMostrarFiltroEdificio] = useState(false);
-  const [fechaSeleccionada, setFechaSeleccionada] = useState("");
   const [toast, setToast] = useState(null);
 
   const hoy = new Date();
   const maxFecha = new Date();
   maxFecha.setDate(hoy.getDate() + 7);
 
-  if (!fechaSeleccionada) {
-    setFechaSeleccionada(hoy.toISOString().split('T')[0]);
-  }
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(
+    hoy.toISOString().split('T')[0]
+  );
 
+  // --- Lógica de Filtros ---
   const toggleEtiqueta = (etiqueta) => {
     if (etiquetasSeleccionadas.includes(etiqueta)) {
       setEtiquetasSeleccionadas(etiquetasSeleccionadas.filter(e => e !== etiqueta));
@@ -42,30 +42,67 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
   };
 
   const salasFiltradas = salas.filter(sala => {
-    // Filtro por texto
     const coincideTexto = sala.nombre.toLowerCase().includes(busquedaTexto.toLowerCase()) ||
                           sala.edificio.toLowerCase().includes(busquedaTexto.toLowerCase());
-    
-    // Filtro por etiquetas (debe tener TODAS las etiquetas seleccionadas)
     const coincideEtiquetas = etiquetasSeleccionadas.length === 0 ||
                               etiquetasSeleccionadas.every(etiq => sala.etiquetas.includes(etiq));
-    
     return coincideTexto && coincideEtiquetas;
   });
 
-  const compartirHorario = (sala) => {
-    const bloquesDisponibles = bloques.filter(b => !sala.ocupados.includes(b));
-    const texto = `📅 Horario Sala ${sala.nombre} - ${sala.edificio}\n\n` +
-                  `👥 Capacidad: ${sala.capacidad} personas\n` +
-                  `🖥️ Equipamiento: ${sala.equipamiento}\n\n` +
-                  `✅ Bloques Disponibles:\n${bloquesDisponibles.join(', ')}\n\n` +
-                  `❌ Bloques Ocupados:\n${sala.ocupados.join(', ') || 'Ninguno'}`;
-    
-    return texto;
+  // --- Lógica de Verificación de Ocupación (MOVIDA ARRIBA) ---
+  // La necesitamos aquí para que generarTextoHorario pueda usarla
+  const verificarOcupacion = (sala, bloque) => {
+    // 1. Estático (Base de datos fija)
+    if (sala.ocupados.includes(bloque)) return true;
+
+    // 2. Dinámico (Reservas realizadas en la app)
+    const [anio, mes, dia] = fechaSeleccionada.split('-');
+    const fechaComparar = `${dia}/${mes}/${anio}`;
+
+    return reservas.some(r => 
+      r.sala === sala.nombre && 
+      r.bloque === bloque && 
+      r.fecha === fechaComparar
+    );
   };
 
-  const handleCompartir = (sala, medio) => {
-    const texto = compartirHorario(sala);
+  // --- Generador de Texto para Compartir (ACTUALIZADO) ---
+  const generarTextoHorario = (sala) => {
+    // Calculamos bloques disponibles reales para la fecha seleccionada
+    const bloquesDisponibles = bloques.filter(b => !verificarOcupacion(sala, b));
+    
+    // Formateamos la fecha para que sea legible
+    const [year, month, day] = fechaSeleccionada.split('-');
+    const fechaFormateada = `${day}/${month}/${year}`;
+
+    return `📅 Horario Sala ${sala.nombre} - ${sala.edificio}\n` +
+           `📝 Descripción: ${sala.equipamiento}\n` +
+           `📆 Fecha: ${fechaFormateada}\n` +
+           `✅ Bloques disponibles: ${bloquesDisponibles.join(', ') || 'Ninguno'}`;
+  };
+
+  // --- Manejadores de Compartir ---
+  const handleBotonCompartir = async (sala) => {
+    const textoCompartir = generarTextoHorario(sala);
+    
+    const shareData = {
+      title: `Horario ${sala.nombre}`,
+      text: textoCompartir,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log(err);
+      }
+    } else {
+      setMostrarCompartir(sala);
+    }
+  };
+
+  const handleOpcionCompartir = (sala, medio) => {
+    const texto = generarTextoHorario(sala);
     const textoEncoded = encodeURIComponent(texto);
     
     switch(medio) {
@@ -74,23 +111,20 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
         break;
       case 'copiar':
         navigator.clipboard.writeText(texto);
-        setToast({
-          type: "success",
-          message: "Horario copiado al portapapeles"
-        });
+        setToast({ type: "success", message: "Horario copiado" });
         break;
       case 'outlook':
         window.open(`mailto:?subject=Horario Sala ${sala.nombre}&body=${textoEncoded}`, '_blank');
         break;
-      default:
-        break;
+      default: break;
     }
     setMostrarCompartir(null);
   };
 
+  // --- Manejadores de Interacción ---
   const toggleSala = (salaId) => {
     setSalaExpandida(salaExpandida === salaId ? null : salaId);
-    setBloqueSeleccionado(null); // Reset selección al cambiar de sala
+    setBloqueSeleccionado(null); 
   };
 
   const handleSeleccionarBloque = (sala, bloque) => {
@@ -107,7 +141,7 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
     setMostrarConfirmacion(false);
     setToast({
       type: "success",
-      message: `Reserva confirmada: Sala ${salaSeleccionada.nombre} - Bloque ${bloqueSeleccionado} - ${fechaSeleccionada}`
+      message: `Reserva confirmada: ${salaSeleccionada.nombre} - Bloque ${bloqueSeleccionado}`
     });
     setBloqueSeleccionado(null);
     setSalaSeleccionada(null);
@@ -120,17 +154,12 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
 
       <div className="max-w-sm mx-auto p-6">
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-2">
-            Salas Disponibles
-          </h2>
-          <p className="text-sm text-gray-600">
-            Consulta la disponibilidad de todas las salas
-          </p>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Salas Disponibles</h2>
+          <p className="text-sm text-gray-600">Consulta la disponibilidad de todas las salas</p>
         </div>
 
-        {/* Barra de búsqueda y filtros unificada */}
+        {/* Barra de Búsqueda y Filtros */}
         <Card className="mb-4">
-          {/* Búsqueda por texto */}
           <div className="relative mb-3">
             <HiMagnifyingGlass className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
             <input
@@ -144,218 +173,120 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
               <button
                 onClick={() => setBusquedaTexto("")}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                aria-label="Limpiar búsqueda"
               >
                 <HiXMark className="text-xl" />
               </button>
             )}
           </div>
 
-          {/* Botones de filtros en horizontal */}
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => {
-                setMostrarFiltroEquipamiento(!mostrarFiltroEquipamiento);
-                setMostrarFiltroEdificio(false);
-              }}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
-                mostrarFiltroEquipamiento 
-                  ? 'bg-blue-50 text-blue-700 border-2 border-blue-200' 
-                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-2 border-transparent'
-              }`}
+              onClick={() => { setMostrarFiltroEquipamiento(!mostrarFiltroEquipamiento); setMostrarFiltroEdificio(false); }}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${mostrarFiltroEquipamiento ? 'bg-blue-50 text-blue-700 border-2 border-blue-200' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-2 border-transparent'}`}
             >
-              <div className="flex items-center gap-1.5">
-                <HiAdjustmentsHorizontal className="text-lg" />
-                <span className="font-medium text-xs">Equipamiento</span>
-              </div>
-              {mostrarFiltroEquipamiento ? (
-                <HiChevronUp className="text-base" />
-              ) : (
-                <HiChevronDown className="text-base" />
-              )}
+              <div className="flex items-center gap-1.5"><HiAdjustmentsHorizontal className="text-lg" /><span className="font-medium text-xs">Equipamiento</span></div>
+              {mostrarFiltroEquipamiento ? <HiChevronUp /> : <HiChevronDown />}
             </button>
-
             <button
-              onClick={() => {
-                setMostrarFiltroEdificio(!mostrarFiltroEdificio);
-                setMostrarFiltroEquipamiento(false);
-              }}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
-                mostrarFiltroEdificio 
-                  ? 'bg-blue-50 text-blue-700 border-2 border-blue-200' 
-                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-2 border-transparent'
-              }`}
+              onClick={() => { setMostrarFiltroEdificio(!mostrarFiltroEdificio); setMostrarFiltroEquipamiento(false); }}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${mostrarFiltroEdificio ? 'bg-blue-50 text-blue-700 border-2 border-blue-200' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-2 border-transparent'}`}
             >
-              <div className="flex items-center gap-1.5">
-                <HiBuildingOffice2 className="text-lg" />
-                <span className="font-medium text-xs">Edificio</span>
-              </div>
-              {mostrarFiltroEdificio ? (
-                <HiChevronUp className="text-base" />
-              ) : (
-                <HiChevronDown className="text-base" />
-              )}
+              <div className="flex items-center gap-1.5"><HiBuildingOffice2 className="text-lg" /><span className="font-medium text-xs">Edificio</span></div>
+              {mostrarFiltroEdificio ? <HiChevronUp /> : <HiChevronDown />}
             </button>
           </div>
 
-          {/* Panel de equipamiento desplegable */}
+          {/* Paneles de Filtros */}
           {mostrarFiltroEquipamiento && (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex flex-wrap gap-2">
                 {etiquetasEquipamiento.map(etiqueta => (
-                  <button
-                    key={etiqueta}
-                    onClick={() => toggleEtiqueta(etiqueta)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      etiquetasSeleccionadas.includes(etiqueta)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {etiqueta}
-                  </button>
+                  <button key={etiqueta} onClick={() => toggleEtiqueta(etiqueta)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${etiquetasSeleccionadas.includes(etiqueta) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{etiqueta}</button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Panel de edificio desplegable */}
           {mostrarFiltroEdificio && (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex flex-wrap gap-2">
                 {etiquetasEdificio.map(etiqueta => (
-                  <button
-                    key={etiqueta}
-                    onClick={() => toggleEtiqueta(etiqueta)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      etiquetasSeleccionadas.includes(etiqueta)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {etiqueta}
-                  </button>
+                  <button key={etiqueta} onClick={() => toggleEtiqueta(etiqueta)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${etiquetasSeleccionadas.includes(etiqueta) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{etiqueta}</button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Mostrar etiquetas seleccionadas */}
           {etiquetasSeleccionadas.length > 0 && (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="text-xs font-semibold text-gray-600 mb-2">Filtros activos:</div>
               <div className="flex flex-wrap gap-1.5">
                 {etiquetasSeleccionadas.map(etiqueta => (
-                  <div
-                    key={etiqueta}
-                    className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-full"
-                  >
+                  <div key={etiqueta} className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
                     <span>{etiqueta}</span>
-                    <button
-                      onClick={() => toggleEtiqueta(etiqueta)}
-                      className="hover:bg-blue-700 rounded-full p-0.5"
-                      aria-label={`Quitar filtro ${etiqueta}`}
-                    >
-                      <HiXMark className="text-sm" />
-                    </button>
+                    <button onClick={() => toggleEtiqueta(etiqueta)} className="hover:bg-blue-700 rounded-full p-0.5"><HiXMark className="text-sm" /></button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Botón limpiar todo (solo si hay filtros activos) */}
           {(busquedaTexto || etiquetasSeleccionadas.length > 0) && (
-            <button
-              onClick={limpiarFiltros}
-              className="mt-3 w-full text-sm text-red-600 hover:text-red-700 font-medium py-2"
-            >
-              Limpiar todos los filtros
-            </button>
+            <button onClick={limpiarFiltros} className="mt-3 w-full text-sm text-red-600 hover:text-red-700 font-medium py-2">Limpiar todos los filtros</button>
           )}
         </Card>
 
         {/* Resultados */}
         {salasFiltradas.length === 0 ? (
-          <Card className="text-center py-8">
-            <p className="text-gray-500">No se encontraron salas con los filtros seleccionados</p>
-          </Card>
+          <Card className="text-center py-8"><p className="text-gray-500">No se encontraron salas</p></Card>
         ) : (
-          <div className="mb-2 text-sm text-gray-600">
-            {salasFiltradas.length} sala{salasFiltradas.length !== 1 ? 's' : ''} encontrada{salasFiltradas.length !== 1 ? 's' : ''}
-          </div>
+          <div className="mb-2 text-sm text-gray-600">{salasFiltradas.length} sala(s) encontrada(s)</div>
         )}
 
         <div className="space-y-4">
           {salasFiltradas.map((sala) => {
             const isExpanded = salaExpandida === sala.id;
-            const bloquesDisponibles = bloques.filter(
-              (b) => !sala.ocupados.includes(b)
-            ).length;
-            const bloquesOcupados = sala.ocupados.length;
+            
+            // Cálculo de disponibilidad
+            const bloquesOcupadosCount = bloques.filter(b => verificarOcupacion(sala, b)).length;
+            const bloquesDisponiblesCount = bloques.length - bloquesOcupadosCount;
 
             return (
               <Card key={sala.id} className="overflow-hidden">
-                {/* Header de la sala - Clickeable */}
-                <button
-                  onClick={() => toggleSala(sala.id)}
-                  className="w-full text-left"
-                >
+                <button onClick={() => toggleSala(sala.id)} className="w-full text-left">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Sala {sala.nombre}
-                      </h3>
+                      <h3 className="text-lg font-bold text-gray-800">Sala {sala.nombre}</h3>
                       <p className="text-sm text-gray-600">{sala.edificio}</p>
                     </div>
                     <div className="text-right mr-2">
-                      <div className="text-xs text-gray-500">Disponibles</div>
-                      <div className="text-2xl font-bold text-green-600">
-                        {bloquesDisponibles}/{bloques.length}
+                      <div className="text-xs text-gray-500">Disp (aprox)</div>
+                      {/* CAMBIO VISUAL: Formato Disponibles / Total */}
+                      <div className="text-xl font-bold text-green-600">
+                        {bloquesDisponiblesCount}/{bloques.length}
                       </div>
                     </div>
-                    <div className="text-2xl text-gray-400">
-                      {isExpanded ? "▲" : "▼"}
-                    </div>
+                    <div className="text-2xl text-gray-400">{isExpanded ? "▲" : "▼"}</div>
                   </div>
                 </button>
 
-                {/* Contenido expandible */}
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
-                    {/* Información de la sala */}
                     <div className="mb-4 space-y-2 text-sm text-gray-700">
-                      <div className="flex items-center">
-                        <HiBuildingOffice2 className="text-lg mr-2" />
-                        <span className="font-semibold mr-2">Edificio:</span>
-                        <span>{sala.edificio}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <HiUsers className="text-lg mr-2" />
-                        <span className="font-semibold mr-2">Capacidad:</span>
-                        <span>{sala.capacidad} personas</span>
-                      </div>
+                      <div className="flex items-center"><HiBuildingOffice2 className="text-lg mr-2" /><span className="font-semibold mr-2">Edificio:</span><span>{sala.edificio}</span></div>
+                      <div className="flex items-center"><HiUsers className="text-lg mr-2" /><span className="font-semibold mr-2">Capacidad:</span><span>{sala.capacidad} personas</span></div>
                     </div>
 
-                    {/* Etiquetas de la sala */}
                     {sala.etiquetas && (
                       <div className="flex flex-wrap gap-1.5 mb-4 pb-4 border-b border-gray-200">
                         {sala.etiquetas.map(etiq => (
-                          <span
-                            key={etiq}
-                            className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200"
-                          >
-                            {etiq}
-                          </span>
+                          <span key={etiq} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">{etiq}</span>
                         ))}
                       </div>
                     )}
 
-                    {/* Selector de Fecha */}
                     <div className="mb-4">
-                      <h4 className="font-semibold text-gray-800 mb-2 text-sm flex items-center gap-2">
-                        <HiCalendar className="text-lg" /> Seleccionar Fecha
-                      </h4>
+                      <h4 className="font-semibold text-gray-800 mb-2 text-sm flex items-center gap-2"><HiCalendar className="text-lg" /> Seleccionar Fecha</h4>
                       <input
                         type="date"
                         value={fechaSeleccionada}
@@ -364,89 +295,36 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
                         max={maxFecha.toISOString().split('T')[0]}
                         className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-colors"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Puedes reservar hasta 7 días de anticipación
-                      </p>
                     </div>
 
-                    {/* Grid de bloques */}
                     <div className="mb-3">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                        Estado por bloque:
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Estado por bloque:</h4>
                       <div className="grid grid-cols-4 gap-2">
                         {bloques.map((bloque) => {
-                          const ocupado = sala.ocupados.includes(bloque);
+                          const ocupado = verificarOcupacion(sala, bloque);
                           const seleccionado = bloqueSeleccionado === bloque && salaSeleccionada?.id === sala.id;
                           return (
                             <button
                               key={bloque}
                               onClick={() => !ocupado && handleSeleccionarBloque(sala, bloque)}
                               disabled={ocupado}
-                              className={`
-                                text-center py-2 rounded-lg text-xs font-semibold transition-all
-                                ${ocupado 
-                                  ? "bg-red-100 text-red-800 cursor-not-allowed" 
-                                  : seleccionado
-                                    ? "bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg scale-105"
-                                    : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"
-                                }
-                              `}
+                              className={`text-center py-2 rounded-lg text-xs font-semibold transition-all ${ocupado ? "bg-red-100 text-red-800 cursor-not-allowed border border-red-200" : seleccionado ? "bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg scale-105" : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer border border-green-200"}`}
                             >
                               {bloque}
                             </button>
                           );
                         })}
                       </div>
-                      {bloqueSeleccionado && salaSeleccionada?.id === sala.id && (
-                        <p className="text-xs text-blue-600 mt-2 font-medium flex items-center gap-1">
-                          <HiCheckCircle /> Bloque {bloqueSeleccionado} seleccionado
-                        </p>
-                      )}
                     </div>
 
-                    {/* Botón de Reservar */}
                     {bloqueSeleccionado && salaSeleccionada?.id === sala.id && (
                       <div className="mb-3">
-                        <Button
-                          onClick={handleReservar}
-                          variant="primary"
-                          className="w-full flex items-center justify-center gap-2"
-                        >
-                          <HiCheckCircle className="text-xl" /> Reservar Bloque {bloqueSeleccionado}
-                        </Button>
+                        <Button onClick={handleReservar} variant="primary" className="w-full flex items-center justify-center gap-2"><HiCheckCircle className="text-xl" /> Reservar Bloque {bloqueSeleccionado}</Button>
                       </div>
                     )}
 
-                    {/* Estadísticas */}
-                    <div className="flex justify-around text-xs bg-gray-50 rounded-lg p-2 mb-3">
-                      <div className="text-center">
-                        <div className="font-semibold text-green-600">
-                          {bloquesDisponibles}
-                        </div>
-                        <div className="text-gray-600">Disponibles</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-red-600">
-                          {bloquesOcupados}
-                        </div>
-                        <div className="text-gray-600">Ocupados</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-gray-800">
-                          {bloques.length}
-                        </div>
-                        <div className="text-gray-600">Total</div>
-                      </div>
-                    </div>
-
-                    {/* Botón compartir horario - Al final */}
-                    <button
-                      onClick={() => setMostrarCompartir(sala)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200"
-                    >
-                      <HiShare className="text-base" /> Compartir Horario
-                    </button>
+                    {/* Botón Compartir con Lógica Nativa */}
+                    <button onClick={() => handleBotonCompartir(sala)} className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200 active:scale-95"><HiShare className="text-base" /> Compartir Horario</button>
                   </div>
                 )}
               </Card>
@@ -454,34 +332,17 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
           })}
         </div>
 
-        {/* Leyenda */}
         <Card className="mt-6 bg-blue-50 border border-blue-200">
-          <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-            <HiChartBar /> Leyenda
-          </h4>
+          <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2"><HiChartBar /> Leyenda</h4>
           <div className="space-y-1 text-sm">
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-green-100 border border-green-300 rounded mr-2"></div>
-              <span className="text-gray-700">Bloque disponible</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-red-100 border border-red-300 rounded mr-2"></div>
-              <span className="text-gray-700">Bloque ocupado</span>
-            </div>
+            <div className="flex items-center"><div className="w-4 h-4 bg-green-100 border border-green-300 rounded mr-2"></div><span className="text-gray-700">Bloque disponible</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 bg-red-100 border border-red-300 rounded mr-2"></div><span className="text-gray-700">Bloque ocupado</span></div>
           </div>
         </Card>
       </div>
       
-      {/* Toast de notificación */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Modal de confirmación */}
       {mostrarConfirmacion && salaSeleccionada && bloqueSeleccionado && (
         <ConfirmModal
           title="Confirmar Reserva"
@@ -491,63 +352,48 @@ export default function HorarioSalas({ onNavigate, onReservar }) {
         />
       )}
 
-      {/* Modal de compartir (copiar alert con toast) */}
-
-      {/* Modal de compartir */}
+      {/* Menú Fallback Desktop */}
       {mostrarCompartir && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full animate-scale-in">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Compartir Horario
-                </h3>
-                <button
-                  onClick={() => setMostrarCompartir(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <HiXMark className="text-2xl" />
-                </button>
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50 transition-opacity" onClick={() => setMostrarCompartir(null)}></div>
+          
+          <div className="relative bg-white rounded-t-2xl shadow-2xl p-6 pb-10 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+            
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Compartir Horario</h3>
+                <p className="text-sm text-gray-500">Sala {mostrarCompartir.nombre} - {mostrarCompartir.edificio}</p>
               </div>
-              
-              <p className="text-sm text-gray-600 mb-4">
-                Sala {mostrarCompartir.nombre} - {mostrarCompartir.edificio}
-              </p>
+              <button onClick={() => setMostrarCompartir(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-600 transition-colors">
+                <HiXMark className="text-xl" />
+              </button>
+            </div>
 
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'whatsapp')}
-                  className="w-full flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 text-green-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">💬</div>
-                  <div className="text-left">
-                    <div className="font-semibold">WhatsApp</div>
-                    <div className="text-xs opacity-75">Compartir por WhatsApp</div>
-                  </div>
-                </button>
+            <div className="grid grid-cols-1 gap-3">
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'whatsapp')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xl">💬</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">WhatsApp</span>
+                  <span className="text-xs text-gray-500">Enviar enlace</span>
+                </div>
+              </button>
 
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'copiar')}
-                  className="w-full flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">📋</div>
-                  <div className="text-left">
-                    <div className="font-semibold">Copiar texto</div>
-                    <div className="text-xs opacity-75">Copiar al portapapeles</div>
-                  </div>
-                </button>
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'outlook')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xl">📧</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">Outlook</span>
+                  <span className="text-xs text-gray-500">Enviar correo</span>
+                </div>
+              </button>
 
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'outlook')}
-                  className="w-full flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">📧</div>
-                  <div className="text-left">
-                    <div className="font-semibold">Outlook</div>
-                    <div className="text-xs opacity-75">Enviar por correo</div>
-                  </div>
-                </button>
-              </div>
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'copiar')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl">📋</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">Copiar</span>
+                  <span className="text-xs text-gray-500">Copiar al portapapeles</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>

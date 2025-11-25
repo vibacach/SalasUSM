@@ -2,27 +2,50 @@ import React, { useState } from "react";
 import Header from "../components/Header";
 import Button from "../components/Button";
 import Card from "../components/Card";
-import ConfirmModal from "../components/ConfirmModal";
 import { salas } from "../data/mockData";
 import { HiClock, HiCalendar, HiUser, HiCheckCircle, HiShare, HiXMark, HiUsers } from "react-icons/hi2";
 
 export default function MisReservas({ reservas, onNavigate, onCancelar }) {
-  const [reservaACancelar, setReservaACancelar] = useState(null);
   const [mostrarCompartir, setMostrarCompartir] = useState(null);
 
-  const compartirReserva = (reserva) => {
-    const texto = `📋 Reserva de Sala - QR Salas USM\n\n` +
-                  `🏢 Sala: ${reserva.sala}\n` +
-                  `🕐 Bloque: ${reserva.bloque}\n` +
-                  `📅 Fecha: ${reserva.fecha}\n` +
-                  `👤 Usuario: ${reserva.usuario}\n\n` +
-                  `✅ Reserva confirmada`;
-    
-    return texto;
+  // Generador de texto para compartir
+  const generarTextoReserva = (reserva) => {
+    return `📋 Reserva de Sala - QR Salas USM\n\n` +
+           `🏢 Sala: ${reserva.sala}\n` +
+           `🕐 Bloque: ${reserva.bloque}\n` +
+           `📅 Fecha: ${reserva.fecha}\n` +
+           `👤 Usuario: ${reserva.usuario}\n\n` +
+           `✅ Reserva confirmada`;
   };
 
-  const handleCompartir = (reserva, medio) => {
-    const texto = compartirReserva(reserva);
+  // Lógica Híbrida: Intenta Nativo -> Cae a Personalizado
+  const handleBotonCompartir = async (reserva) => {
+    const textoCompartir = generarTextoReserva(reserva);
+    
+    const shareData = {
+      title: 'Reserva Sala USM',
+      text: textoCompartir,
+      // url: window.location.href // ELIMINADO: Ya no compartimos la URL
+    };
+
+    // 1. Intentar usar la API Nativa del navegador (Móviles)
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        console.log("Compartido exitosamente vía nativa");
+      } catch (err) {
+        // Si el usuario cancela o hay error, no hacemos nada o mostramos log
+        console.log("Error o cancelación al compartir:", err);
+      }
+    } else {
+      // 2. Si no soporta nativo (Desktop), mostramos nuestro menú personalizado
+      setMostrarCompartir(reserva);
+    }
+  };
+
+  // Manejadores para el menú personalizado (Fallback)
+  const handleOpcionCompartir = (reserva, medio) => {
+    const texto = generarTextoReserva(reserva);
     const textoEncoded = encodeURIComponent(texto);
     
     switch(medio) {
@@ -31,7 +54,6 @@ export default function MisReservas({ reservas, onNavigate, onCancelar }) {
         break;
       case 'copiar':
         navigator.clipboard.writeText(texto);
-        alert('Reserva copiada al portapapeles');
         break;
       case 'outlook':
         window.open(`mailto:?subject=Reserva Sala ${reserva.sala}&body=${textoEncoded}`, '_blank');
@@ -78,7 +100,6 @@ export default function MisReservas({ reservas, onNavigate, onCancelar }) {
 
             <div className="space-y-3">
               {reservas.map((reserva) => {
-                // Buscar información de la sala
                 const infoSala = salas.find(s => s.nombre === reserva.sala);
                 
                 return (
@@ -113,20 +134,20 @@ export default function MisReservas({ reservas, onNavigate, onCancelar }) {
                     )}
                   </div>
 
-                  {/* Botones en un solo contenedor horizontal */}
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => setReservaACancelar(reserva)}
+                      onClick={() => onCancelar(reserva.id)}
                       variant="danger"
                       size="small"
                       className="flex-1 py-2 text-sm"
                     >
-                      Cancelar Reserva
+                      Cancelar
                     </Button>
                     
+                    {/* Botón Compartir Actualizado */}
                     <button
-                      onClick={() => setMostrarCompartir(reserva)}
-                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+                      onClick={() => handleBotonCompartir(reserva)}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors active:scale-95"
                       aria-label="Compartir reserva"
                     >
                       <HiShare className="text-lg" />
@@ -149,76 +170,51 @@ export default function MisReservas({ reservas, onNavigate, onCancelar }) {
           </>
         )}
       </div>
-      
-      {/* Modal de confirmación para cancelar */}
-      {reservaACancelar && (
-        <ConfirmModal
-          title="Cancelar Reserva"
-          message={`¿Estás seguro de cancelar la reserva de la sala ${reservaACancelar.sala} para el bloque ${reservaACancelar.bloque}?`}
-          onConfirm={() => {
-            onCancelar(reservaACancelar.id);
-            setReservaACancelar(null);
-          }}
-          onCancel={() => setReservaACancelar(null)}
-        />
-      )}
 
-      {/* Modal de compartir */}
+      {/* Menú Inferior de Compartir (Fallback para Desktop) */}
       {mostrarCompartir && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full animate-scale-in">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Compartir Reserva
-                </h3>
-                <button
-                  onClick={() => setMostrarCompartir(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label="Cerrar"
-                >
-                  <HiXMark className="text-2xl" />
-                </button>
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50 transition-opacity" onClick={() => setMostrarCompartir(null)}></div>
+          
+          <div className="relative bg-white rounded-t-2xl shadow-2xl p-6 pb-10 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+            
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Compartir Reserva</h3>
+                <p className="text-sm text-gray-500">
+                  {mostrarCompartir.sala} - Bloque {mostrarCompartir.bloque}
+                </p>
               </div>
-              
-              <p className="text-sm text-gray-600 mb-4">
-                Sala {mostrarCompartir.sala} - Bloque {mostrarCompartir.bloque}
-              </p>
+              <button onClick={() => setMostrarCompartir(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-600 transition-colors">
+                <HiXMark className="text-xl" />
+              </button>
+            </div>
 
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'whatsapp')}
-                  className="w-full flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 text-green-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">💬</div>
-                  <div className="text-left">
-                    <div className="font-semibold">WhatsApp</div>
-                    <div className="text-xs opacity-75">Compartir por WhatsApp</div>
-                  </div>
-                </button>
+            <div className="grid grid-cols-1 gap-3">
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'whatsapp')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xl">💬</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">WhatsApp</span>
+                  <span className="text-xs text-gray-500">Enviar mensaje</span>
+                </div>
+              </button>
 
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'copiar')}
-                  className="w-full flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">📋</div>
-                  <div className="text-left">
-                    <div className="font-semibold">Copiar texto</div>
-                    <div className="text-xs opacity-75">Copiar al portapapeles</div>
-                  </div>
-                </button>
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'outlook')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xl">📧</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">Outlook</span>
+                  <span className="text-xs text-gray-500">Enviar correo</span>
+                </div>
+              </button>
 
-                <button
-                  onClick={() => handleCompartir(mostrarCompartir, 'outlook')}
-                  className="w-full flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl transition-colors"
-                >
-                  <div className="text-2xl">📧</div>
-                  <div className="text-left">
-                    <div className="font-semibold">Outlook</div>
-                    <div className="text-xs opacity-75">Enviar por correo</div>
-                  </div>
-                </button>
-              </div>
+              <button onClick={() => handleOpcionCompartir(mostrarCompartir, 'copiar')} className="flex flex-row items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors active:scale-95">
+                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl">📋</div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-gray-700">Copiar</span>
+                  <span className="text-xs text-gray-500">Copiar al portapapeles</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>
