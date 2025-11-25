@@ -17,26 +17,32 @@ export default function App() {
   const [salaSeleccionada, setSalaSeleccionada] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // --- PERSISTENCIA LOCAL ---
+  // --- PERSISTENCIA LOCAL (Local Storage) ---
+  // 1. Inicialización: Leemos del navegador o usamos los datos de ejemplo
   const [reservas, setReservas] = useState(() => {
     const reservasGuardadas = localStorage.getItem("reservasUSM");
     return reservasGuardadas ? JSON.parse(reservasGuardadas) : reservasIniciales;
   });
 
+  // 2. Efecto: Cada vez que 'reservas' cambia, guardamos en el navegador
   useEffect(() => {
     localStorage.setItem("reservasUSM", JSON.stringify(reservas));
   }, [reservas]);
-  // --------------------------
+  // ------------------------------------------
 
+  // Función de navegación
   const handleNavigate = (vista) => {
     setVistaActual(vista);
   };
 
+  // Función para seleccionar sala
   const handleSalaSeleccionada = (sala) => {
     setSalaSeleccionada(sala);
   };
 
+  // Función para realizar una reserva (CON UNDO)
   const handleReservar = (sala, bloque, fecha) => {
+    // Aseguramos el formato DD/MM/YYYY
     const fechaObj = fecha ? new Date(fecha + 'T00:00:00') : new Date();
     const dia = String(fechaObj.getDate()).padStart(2, '0');
     const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
@@ -50,35 +56,46 @@ export default function App() {
       fecha: fechaFormateada,
       usuario: "Usuario Demo",
     };
-    setReservas([...reservas, nuevaReserva]);
+
+    // 1. Agregamos la reserva inmediatamente
+    setReservas((prev) => [...prev, nuevaReserva]);
+
+    // 2. Mostramos Toast con opción de REVERTIR
     setToast({
-      message: `Reserva confirmada: ${sala.nombre}, Bloque ${bloque}`,
+      message: `Reserva realizada: ${sala.nombre} - ${bloque}`,
       type: "success",
-      duration: 3000
-    });
-  };
-
-  // CAMBIO IMPORTANTE: Lógica de cancelación con "Deshacer"
-  const handleCancelarReserva = (id) => {
-    // 1. Encontrar la reserva antes de borrarla
-    const reservaEliminada = reservas.find((r) => r.id === id);
-    
-    if (!reservaEliminada) return;
-
-    // 2. Borrarla inmediatamente
-    setReservas((prev) => prev.filter((r) => r.id !== id));
-
-    // 3. Mostrar Toast con opción de revertir
-    setToast({
-      message: "Reserva cancelada",
-      type: "info",
-      duration: 5000, // 5 segundos como pediste
+      duration: 5000,
       action: {
         label: "Revertir",
         onClick: () => {
-          // Re-agregar la reserva eliminada
+          // Eliminar la reserva recién creada
+          setReservas((prev) => prev.filter((r) => r.id !== nuevaReserva.id));
+          setToast({
+            message: "Reserva revertida correctamente",
+            type: "info",
+            duration: 3000
+          });
+        }
+      }
+    });
+  };
+
+  // Función para cancelar una reserva (CON UNDO)
+  const handleCancelarReserva = (id) => {
+    const reservaEliminada = reservas.find((r) => r.id === id);
+    if (!reservaEliminada) return;
+
+    setReservas((prev) => prev.filter((r) => r.id !== id));
+
+    setToast({
+      message: "Reserva cancelada",
+      type: "info",
+      duration: 5000,
+      action: {
+        label: "Deshacer",
+        onClick: () => {
           setReservas((current) => [...current, reservaEliminada]);
-          setToast(null); // Cerrar toast
+          setToast(null);
         }
       }
     });
